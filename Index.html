@@ -330,8 +330,9 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
     documents from Kyeongam Base, expose the Directorate's plans in their underground research facility, and end it all at the
     summit fortress — face to face with <b style="color:#ff8a70">Colonel Dragan Voss</b>.</p>
     <p style="line-height:1.6;font-size:15.5px;color:#c6cebb;margin-top:12px">
-    A complete single-player FPS: 5 missions, 6 weapons, enemy AI with patrol/cover/suppression, checkpoints, health regen,
-    night-vision goggles, aim assist, boss fight, cinematics, full PC + mobile controls, procedural audio and scalable graphics.</p>
+    A complete single-player FPS: 5 missions, 6 weapons, enemy AI with patrol/cover/suppression, health regen,
+    night-vision goggles, aim assist, instant mission restarts, boss fight, cinematics, full PC + mobile controls,
+    procedural audio and scalable graphics.</p>
     <div class="disclaimer" style="margin-top:18px">Version 1.0 · All characters, locations, units and political organizations are fictional.
     No real countries, armies or events are depicted.</div>
     <div class="btnRow"><button class="btn" data-a="back" data-to="scrMenu">◀ BACK</button></div>
@@ -354,13 +355,13 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
 
 <div class="screen" id="scrDead"><div class="panel" style="width:min(460px,92vw);text-align:center">
   <div class="bigTitle">K.I.A.</div><div class="subtle" id="deadSub">Captain Carter was killed in action.</div>
-  <div class="btnRow"><button class="btn primary" data-a="cp">RESTART CHECKPOINT</button>
-  <button class="btn" data-a="restart">RESTART MISSION</button><button class="btn" data-a="tomenu">MAIN MENU</button></div></div></div>
+  <div class="btnRow"><button class="btn primary" data-a="restart">RESTART MISSION</button>
+  <button class="btn" data-a="tomenu">MAIN MENU</button></div></div></div>
 
 <div class="screen" id="scrFailed"><div class="panel" style="width:min(480px,92vw);text-align:center">
   <div class="bigTitle">MISSION FAILED</div><div class="subtle" id="failReason"></div>
-  <div class="btnRow"><button class="btn primary" data-a="cp">RETRY FROM CHECKPOINT</button>
-  <button class="btn" data-a="restart">RESTART MISSION</button><button class="btn" data-a="tomenu">MAIN MENU</button></div></div></div>
+  <div class="btnRow"><button class="btn primary" data-a="restart">RETRY MISSION</button>
+  <button class="btn" data-a="tomenu">MAIN MENU</button></div></div></div>
 
 <div class="screen" id="scrComplete"><div class="panel" style="width:min(560px,92vw);text-align:center">
   <div class="bigTitle">MISSION COMPLETE</div><div class="subtle" id="cmpName"></div>
@@ -1368,6 +1369,14 @@ function tryFire(w){
  noiseAlert(player.pos.x,player.pos.z,w.key==='sr'?90:55);
  G.combatT=6;
 }
+function enemyRayT(ox,oy,oz,dx,dy,dz,e,maxT){
+ let t=null;const s=e.sc;
+ for(const sp of [[1.55,.24],[1.15,.42],[.65,.36],[.28,.3]]){
+  const h=raySphere(ox,oy,oz,dx,dy,dz,e.pos.x,e.pos.y+sp[0]*s,e.pos.z,sp[1]*s,maxT);
+  if(h!==null&&(t===null||h<t))t=h;
+ }
+ return t;
+}
 function aimAssist(ex,ey,ez,dx,dy,dz,maxRange){
  if(!W)return null;
  const cone=touchOn()?.13:.085;
@@ -1382,7 +1391,21 @@ function aimAssist(ex,ey,ez,dx,dy,dz,maxRange){
   vx/=d;vy/=d;vz/=d;
   const ang=Math.acos(clamp(vx*dx+vy*dy+vz*dz,-1,1));
   if(ang>=bestAng)continue;
-  if(!segClear(ex,ey,ez,e.pos.x,ty,e.pos.z))continue;
+  // would a shot along the snapped direction actually land on this man?
+  const mx=ex+vx*.6,my=ey-.06+vy*.6,mz=ez+vz*.6;
+  const t=enemyRayT(mx,my,mz,vx,vy,vz,e,range);
+  if(t===null)continue;
+  let blocked=false;
+  for(let i=0;i<W.colliders.length;i++){const h=rayBox(mx,my,mz,vx,vy,vz,W.colliders[i],t-.05);if(h!==null){blocked=true;break;}}
+  if(blocked)continue;
+  // and would it hit somebody in front of him first?
+  let front=null;
+  for(const o of W.enemies){
+   if(o===e||o.dead)continue;
+   const ot=enemyRayT(mx,my,mz,vx,vy,vz,o,t);
+   if(ot!==null&&ot<t){front=o;break;}
+  }
+  if(front)continue;
   bestAng=ang;best={x:vx,y:vy,z:vz,e};
  }
  return best;
@@ -1548,7 +1571,7 @@ function hurtPlayer(dmg,src){
 function playerDie(){
  player.dead=true;G.state='dead';
  if(document.pointerLockElement)document.exitPointerLock();
- $('deadSub').textContent='Captain Carter was killed in action. '+ (G.run.cp?'Reverting to last checkpoint.':'');
+ $('deadSub').textContent='Captain Carter was killed in action. Restarting the mission from the beginning.';
  showScreen('scrDead');$('hud').classList.remove('show');
  Aud.setIntensity(0);
 }
@@ -1641,6 +1664,27 @@ function updateEnemies(dt){
    e.mesh.position.y=-Math.min(.35,Math.max(0,e.corpseT-6)*.12);
    if(e.corpseT>12&&e.mesh.visible){e.mesh.visible=false;}
    continue;
+  }
+  // rescue: if he has been shoved into a wall/crate (bullets then hit the prop, not him), pop him out
+  e.unstickT=(e.unstickT||0)-dt;
+  if(e.unstickT<=0){
+   e.unstickT=.7;
+   for(const c of W.colliders){
+    if(c.y1<=.5||c.y0>=1.3)continue;
+    if(!(e.pos.x+e.r>c.x0&&e.pos.x-e.r<c.x1&&e.pos.z+e.r>c.z0&&e.pos.z-e.r<c.z1))continue;
+    let bx=null,bz=null;
+    for(let a=0;a<16&&bx===null;a++){
+     const ang=a/16*Math.PI*2,nx=e.pos.x+Math.cos(ang)*1.6,nz=e.pos.z+Math.sin(ang)*1.6;
+     let ok=true;
+     for(const c2 of W.colliders){
+      if(c2.y1<=.5||c2.y0>=1.3)continue;
+      if(nx+e.r>c2.x0&&nx-e.r<c2.x1&&nz+e.r>c2.z0&&nz-e.r<c2.z1){ok=false;break;}
+     }
+     if(ok){bx=nx;bz=nz;}
+    }
+    if(bx!==null){e.pos.x=bx;e.pos.z=bz;e.mesh.position.x=bx;e.mesh.position.z=bz;}
+    break;
+   }
   }
   e.losT-=dt;
   const eyeY=e.pos.y+1.5*e.sc,pYE=player.pos.y+(player.crouch?.85:1.3);
@@ -1855,7 +1899,6 @@ function completeObj(o){
  if(o.point&&o.point.marker)o.point.marker.visible=false;
  Aud.obj();toast('OBJECTIVE COMPLETE');
  if(o.onDone)o.onDone();
- checkpoint();
  if(W.objectives.every(x=>x.done))missionComplete();
  else updateObjHUD(true);
 }
@@ -1899,13 +1942,6 @@ function showInteract(near,ip,o){
   if(interShown){w.style.display='none';interShown=false;}
   $('tbUse').style.display='none';
  }
-}
-function checkpoint(){
- G.run.cp={x:player.pos.x,z:player.pos.z,yaw:player.yaw,
-  flags:Object.assign({},G.run.flags),killed:Object.assign({},G.run.killed),
-  objDone:W.objectives.filter(o=>o.done).length,
-  ammo:player.weapons.map(w=>({mag:w.mag,reserve:w.reserve}))};
- toast('CHECKPOINT REACHED');
 }
 function missionComplete(){
  G.state='cine';
@@ -2116,7 +2152,7 @@ function resumeGame(){
  Aud.ui();
 }
 function quitToMenu(){
- G.state='menu';W=null;G.run.cp=null;
+ G.state='menu';W=null;
  if(NV.on)NV.set(false);
  $('hud').classList.remove('show');$('touchUI').style.display='none';$('bossWrap').style.display='none';
  if(document.pointerLockElement)document.exitPointerLock();
@@ -2129,7 +2165,7 @@ function startMission(idx,restore){
  Aud.init();
  G.missionIdx=idx;
  const def=MISSIONS[idx];
- G.run={flags:{},killed:{},cp:restore||null};
+ G.run={flags:{},killed:{}};
  if(restore){G.run.flags=restore.flags;G.run.killed=restore.killed;}
  G.state='loading';
  $('loadTitle').textContent='MISSION '+(idx+1)+' — '+def.name;
@@ -2179,10 +2215,7 @@ function beginPlay(){
  updateOrientationUI();
  if(MISSIONS[G.missionIdx].hint)toast(MISSIONS[G.missionIdx].hint);
 }
-function restartCheckpoint(){
- if(G.run.cp)startMission(G.missionIdx,G.run.cp);
- else startMission(G.missionIdx,false);
-}
+function restartCheckpoint(){startMission(G.missionIdx,false);}
 
 /* ---------------- MISSIONS ---------------- */
 function scatter(rng,x0,x1,z0,z1,n,fn,avoid){
@@ -2590,7 +2623,7 @@ MISSIONS.push({
   addBox(-4,1,14,2,.16,4,MAT.metal,{collide:true});addBox(-4,.4,14,.15,.8,.15,MAT.metal);
   addBox(4,.8,16,1.6,1.6,1.6,MAT.metalD,{collide:true});
   barrel(-5,-4);barrel(5.5,-5,MAT.metal);
-  sandbag(0,30,4,'x');sandbag(-3,10,3,'z');
+  sandbag(-4,38,4,'z');sandbag(4,38,4,'z');sandbag(-1.2,10,3,'z');
   W.coverPts.push([-20,3.5],[-20,6.5],[20,3.5],[20,6.5],[-38,10],[-38,0],[38,10],[38,0],[4,-16],[-4,30],[0,-28],[3,-8],[-3,12]);
   // power switching
   const setPower=on=>{
