@@ -569,6 +569,13 @@ function initThree(){
 function onResize(){
  camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
  renderer.setSize(window.innerWidth,window.innerHeight);
+ updateOrientationUI();
+}
+function updateOrientationUI(){
+ const portrait=window.innerHeight>window.innerWidth;
+ const touch=typeof touchOn==='function'?touchOn():false;
+ const rm=$('rotateMsg');
+ if(rm)rm.style.display=(touch&&portrait)?'flex':'none';
 }
 /* shared geo & mats */
 const GEO={},MAT={};
@@ -633,6 +640,9 @@ function resetWorld(skyOpt){
  W={scene:new THREE.Scene(),colliders:[],triggers:[],pickups:[],enemies:[],npc:null,projectiles:[],
   interacts:[],coverPts:[],updates:[],uid:0,start:{x:0,z:10,yaw:0},objectives:[],boss:null,bossDead:false,
   flags:G.run.flags,bounds:70};
+ // the view-model (weapon) and the muzzle-flash light hang off the camera, so the camera
+ // has to be part of the scene graph for them to be rendered
+ if(camera)W.scene.add(camera);
  return W;
 }
 function addBox(x,y,z,w,h,d,mat,opt){
@@ -645,15 +655,13 @@ function addBox(x,y,z,w,h,d,mat,opt){
 }
 function addCyl(x,y,z,rt,rb,h,mat,opt){
  opt=opt||{};
- const g=new THREE.CylinderGeometry(rt*.5*2/2,rb*.5*2/2,h,opt.seg||10);
- // build with radii directly:
- const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,opt.seg||10),opt.sharedGeo?GEO.cyl:null);
- // simpler: scale shared cyl (radius .5 h1)
- const mm=new THREE.Mesh(GEO.cyl,mat);mm.scale.set(rb*2,h,rb*2);mm.position.set(x,y,z);
- if(opt.rotX)mm.rotation.x=opt.rotX; if(opt.rotZ)mm.rotation.z=opt.rotZ;
- W.scene.add(mm);
+ const seg=opt.seg||10;
+ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+ m.position.set(x,y,z);
+ if(opt.rotX)m.rotation.x=opt.rotX; if(opt.rotZ)m.rotation.z=opt.rotZ;
+ W.scene.add(m);
  if(opt.collide)W.colliders.push({x0:x-rb,x1:x+rb,y0:y-h/2,y1:y+h/2,z0:z-rb,z1:z+rb});
- return mm;
+ return m;
 }
 function blobShadow(x,z,r){const m=new THREE.Mesh(GEO.circle,MAT.blob);m.rotation.x=-Math.PI/2;m.scale.set(r*2,r*2,1);
  m.position.set(x,.02,z);W.scene.add(m);return m;}
@@ -691,10 +699,6 @@ function wallX(cx,z,len,h,t,door,mat){
  if(!door){addBox(cx,y,z,len,h,t,mat);return;}
  const dw=door.w||1.8,dh=door.h||2.4,off=door.off||0;
  const L=len/2+off-dw/2,R=len/2-off-dw/2;
- if(L>.05)addBox(cx-(len/2-L/2+ (0)),y,z,L,h,t,mat);
- if(L>.05){}
- // recompute centers explicitly:
- W.colliders.length-= (L>.05?1:0); if(L>.05)W.scene.remove(W.scene.children[W.scene.children.length-1]);
  if(L>.05){const c=cx-len/2+L/2;addBox(c,y,z,L,h,t,mat);}
  if(R>.05){const c=cx+len/2-R/2;addBox(c,y,z,R,h,t,mat);}
  if(h-dh>.05)addBox(cx+off,dh+(h-dh)/2,z,dw,h-dh,t,mat);
@@ -766,11 +770,11 @@ function fence(x,z,len,axis,h){
  addBox(x,h/2,z,w,h,d,MAT.metalD,{collide:true});
  const n=Math.max(2,Math.round(len/3));
  for(let i=0;i<=n;i++){const px=axis==='x'?x-len/2+len*i/n:x,pz=axis==='x'?z:z-len/2+len*i/n;
-  addBox(px,h/2+.1,px===x&&axis==='z'?z:pz,.16,h+.25,.16,MAT.dark,{collide:false});}
+  addBox(px,h/2+.1,pz,.16,h+.25,.16,MAT.dark,{collide:false});}
 }
 function poleLight(x,z,h,col,lit){
  addCyl(x,h/2,z,.09,.13,h,MAT.dark,{collide:true,seg:6});
- addBox(x+(lit?0:0),h+.12,z,.7,.22,.35,MAT.emWarm,{collide:false});
+ addBox(x,h+.12,z,.7,.22,.35,lit?MAT.emWarm:MAT.dark,{collide:false});
  if(Q.lights&&col){const l=new THREE.PointLight(col,.9,20);l.position.set(x,h-.2,z);W.scene.add(l);}
 }
 function tower(x,z){
@@ -788,8 +792,9 @@ function truck(x,z,rotY){
  for(const[wx,wz]of[[-1,-1.7],[1,-1.7],[-1,1.4],[1,1.4]]){const wh=new THREE.Mesh(GEO.cyl,MAT.black);
   wh.rotation.z=Math.PI/2;wh.scale.set(.9,.3,.9);wh.position.set(wx,.45,wz);g.add(wh);}
  g.position.set(x,0,z);g.rotation.y=rotY||0;W.scene.add(g);
- const c=Math.cos(rotY||0),s=Math.sin(rotY||0);
- const hw=1.2,hd=(rotY&&Math.abs(Math.round((rotY)/(Math.PI/2))%2)===1)?1.7:2.6;
+ const quarter=Math.round((rotY||0)/(Math.PI/2));
+ const turned=(((quarter%2)+2)%2)===1;
+ const hw=turned?2.6:1.2,hd=turned?1.2:2.6;
  W.colliders.push({x0:x-hw,x1:x+hw,y0:0,y1:2.6,z0:z-hd,z1:z+hd});
  blobShadow(x,z,2.2);
 }
@@ -821,9 +826,10 @@ function heli(x,z){
  blobShadow(x,z,2.6);
 }
 function beamMarker(x,z,mat){
- const m=new THREE.Mesh(GEO.cyl,mat||MAT.beamG);m.scale.set(3,60,3);m.position.set(x,30,z);W.scene.add(m);
+ const bm=mat||MAT.beamG;
+ const m=new THREE.Mesh(GEO.cyl,bm);m.scale.set(3,60,3);m.position.set(x,30,z);W.scene.add(m);
  const ring=new THREE.Mesh(GEO.circle,MAT.marker);ring.rotation.x=-Math.PI/2;ring.scale.set(3.4,3.4,1);ring.position.set(x,.04,z);W.scene.add(ring);
- W.updates.push(dt=>{mat.opacity=.09+Math.sin(performance.now()*.003)*.045;});
+ W.updates.push(dt=>{bm.opacity=.09+Math.sin(performance.now()*.003)*.045;});
  return[m,ring];
 }
 function interactProp(x,y,z,label,hold,fn,gate){
@@ -859,7 +865,7 @@ const FX={pCount:0,cap:420,pos:null,col:null,vel:null,life:null,maxLife:null,sz:
   g.setAttribute('color',new THREE.BufferAttribute(this.col,3));
   const mat=new THREE.PointsMaterial({size:.09,vertexColors:true,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false,map:TEX.flash,sizeAttenuation:true});
   this.pts=new THREE.Points(g,mat);this.pts.frustumCulled=false;scene.add(this.pts);
-  this.pCount=0;
+  this.pCount=0;this.tracers=[];this.decals=[];this.flashes=[];this.tIdx=0;this.dIdx=0;this.fIdx=0;
   for(let i=0;i<26;i++){const lg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
    const ln=new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xffe090,transparent:true,opacity:0,blending:THREE.AdditiveBlending}));
    ln.visible=false;ln.frustumCulled=false;scene.add(ln);this.tracers.push({line:ln,life:0});}
@@ -910,7 +916,6 @@ const FX={pCount:0,cap:420,pos:null,col:null,vel:null,life:null,maxLife:null,sz:
    this.vel[i*3+1]-=9*dt*(this.sz[i]||1);
    this.pos[i*3]+=this.vel[i*3]*dt;this.pos[i*3+1]+=this.vel[i*3+1]*dt;this.pos[i*3+2]+=this.vel[i*3+2]*dt;
    const f=Math.max(0,this.life[i]/this.maxLife[i]);
-   this.col[i*3]*=(f>.9||true)?1:1; // keep hue, fade via color scale
    const c0=this.col[i*3],c1=this.col[i*3+1],c2=this.col[i*3+2];
    // fade: scale colors toward 0 by f each frame implicitly:
    this.col[i*3]=c0*(0.86+0.14*f);this.col[i*3+1]=c1*(0.8+0.2*f);this.col[i*3+2]=c2*(0.8+0.2*f);
@@ -928,9 +933,10 @@ function explosion(x,y,z,dmg,owner){
  Aud.explode(dist2(x,z,player.pos.x,player.pos.z));
  FX.burst(x,y+.4,z,26,1,.72,.25,7,1.1);
  FX.burst(x,y+.4,z,14,.55,.55,.6,3.4,1.6);
- const fl=new THREE.Mesh(GEO.sph,MAT.addWhite);fl.position.set(x,y+.5,z);W.scene.add(fl);
- let t=0;W.updates.push(dt=>{t+=dt;const s=1+t*26;fl.scale.set(s,s,s);fl.material=MAT.addWhite;fl.material.opacity=Math.max(0,.9-t*3.4);
-  if(t>.3){W.scene.remove(fl);return true;}});
+ const flMat=new THREE.MeshBasicMaterial({color:0xffe8b0,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+ const fl=new THREE.Mesh(GEO.sph,flMat);fl.position.set(x,y+.5,z);W.scene.add(fl);
+ let t=0;W.updates.push(dt=>{t+=dt;const s=1+t*26;fl.scale.set(s,s,s);flMat.opacity=Math.max(0,.9-t*3.4);
+  if(t>.3){W.scene.remove(fl);flMat.dispose();return true;}});
  if(Q.lights){const l=new THREE.PointLight(0xffaa44,3,16);l.position.set(x,y+1,z);W.scene.add(l);
   let t2=0;W.updates.push(dt=>{t2+=dt;l.intensity=Math.max(0,3-t2*12);if(t2>.3){W.scene.remove(l);return true;}});}
  FX.shake(clamp(1.1-dist2(x,z,player.pos.x,player.pos.z)/22,0,.9));
@@ -1032,12 +1038,13 @@ function bindInput(){
  window.addEventListener('blur',()=>{Input.keys={};if(G.state==='play')pauseGame();});
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.state==='play')pauseGame();});
  document.addEventListener('mousemove',e=>{
-  if(document.pointerLockElement===$('cv')&&(G.state==='play')){
+  if((document.pointerLockElement===$('cv')||G.freeLook)&&(G.state==='play')){
    Input.mx+=e.movementX*S.sens;Input.my+=e.movementY*S.sens*(S.invert?-1:1);
   }
  });
  document.addEventListener('mousedown',e=>{
-  if(G.state==='play'&&document.pointerLockElement===$('cv')){
+  if(G.state==='play'&&(document.pointerLockElement===$('cv')||G.freeLook)){
+   if(e.target&&e.target.closest&&e.target.closest('button,[data-a],.tb,#clickPlay'))return;
    if(e.button===0)Input.mouseL=true;
    if(e.button===2)Input.mouseR=true;
   }
@@ -1045,7 +1052,7 @@ function bindInput(){
  window.addEventListener('mouseup',e=>{if(e.button===0)Input.mouseL=false;if(e.button===2)Input.mouseR=false;});
  window.addEventListener('contextmenu',e=>e.preventDefault());
  window.addEventListener('wheel',e=>{
-  if(G.state==='play'&&document.pointerLockElement===$('cv')){
+  if(G.state==='play'&&(document.pointerLockElement===$('cv')||G.freeLook)){
    const dir=e.deltaY>0?1:-1;const n=player.weapons.length;
    switchWeapon(((player.slot+dir)%n+n)%n);
   }
@@ -1108,11 +1115,23 @@ function bindInput(){
  $('clickPlay').addEventListener('click',clickDeploy);
  $('clickPlay').addEventListener('touchend',e=>{e.preventDefault();clickDeploy();});
  $('pauseBtn').addEventListener('click',e=>{e.stopPropagation();pauseGame();});
- $('cv').addEventListener('click',()=>{if(G.state==='play'&&!touchOn()&&!document.pointerLockElement)$('clickPlay').style.display='flex';});
+ $('cv').addEventListener('click',()=>{if(G.state==='play'&&!touchOn()&&!document.pointerLockElement&&!G.freeLook)$('clickPlay').style.display='flex';});
 }
+function enableFreeLook(){
+ G.freeLook=true;
+ $('clickPlay').style.display='none';
+ kf('MOUSE LOCK UNAVAILABLE — FREE-LOOK MODE',true);
+}
+function lockPointer(){
+ const cv=$('cv');
+ if(!cv.requestPointerLock)return enableFreeLook();
+ try{const p=cv.requestPointerLock();if(p&&p.catch)p.catch(()=>enableFreeLook());}
+ catch(e){enableFreeLook();}
+}
+document.addEventListener('pointerlockerror',()=>{if(G.state==='play'||G.state==='ready')enableFreeLook();});
 function clickDeploy(){
  Aud.init();
- if(!touchOn()){const p=$('cv').requestPointerLock&&$('cv').requestPointerLock();}
+ if(!touchOn())lockPointer();
  if(G.state==='ready')G.state='play';
  $('clickPlay').style.display='none';
 }
@@ -1121,7 +1140,7 @@ document.addEventListener('pointerlockchange',()=>{
   $('clickPlay').style.display='none';
   if(G.state==='ready')G.state='play';
  }else{
-  if(G.state==='play'&&!touchOn()){pauseGame();}
+  if(G.state==='play'&&!touchOn()&&!G.freeLook){pauseGame();}
  }
 });
 
@@ -1179,6 +1198,7 @@ function curWep(){return player.weapons[player.slot];}
 function updateWeapons(dt){
  const w=curWep();if(!w)return;
  const d=w.def;
+ if(Input.switchQ>=0){const q=Input.switchQ;Input.switchQ=-1;if(q>=0)switchWeapon(q);}
  WSTATE.cool-=dt;
  // switch anim
  if(WSTATE.switchT>0){WSTATE.switchT-=dt;
@@ -1268,7 +1288,7 @@ function tryFire(w){
  player.pitch+=d.kick*.55;player.yaw+=rand(-.012,.012)*d.kick*20;
  FX.shake(d.kick*.5);
  if(Q.lights){flashLight.intensity=1.6;flashLight.position.set(.25+dx*.4,-.15+dy*.4,-.8+dz*.4);}
- if(WSTATE.vm){const fl=WSTATE.vm.userData.fl;fl.visible=true;fl.userData.t=0;
+ if(WSTATE.vm){const fl=WSTATE.vm.userData.flash;fl.visible=true;fl.userData.t=0;
   fl.rotation.z=Math.random()*6;const s=rand(.28,.44);fl.scale.set(s,s,1);}
  const mzx=ex+dx*.8,mzy=ey-.04+dy*.8,mzz=ez+dz*.8;
  FX.flash(mzx,mzy,mzz,.5);
@@ -1286,7 +1306,6 @@ function fireRay(ox,oy,oz,dx,dy,dz,range,dmg){
    if(t!==null&&t<eT){eT=t;eHit=e;eHead=sp[2]>2;}
   }
  }
- if(W.npc&&!W.npc.dead){} // friendly fire disabled for clarity
  let wT=range;
  for(let i=0;i<W.colliders.length;i++){const t=rayBox(ox,oy,oz,dx,dy,dz,W.colliders[i],wT);if(t!==null&&t<wT)wT=t;}
  if(eHit&&eT<=wT){
@@ -1415,7 +1434,7 @@ function updatePlayer(dt){
  for(let i=W.pickups.length-1;i>=0;i--){const pk=W.pickups[i];
   if(dist2(player.pos.x,player.pos.z,pk.x,pk.z)<1.3){
    if(pk.type==='ammo'){player.weapons.forEach(w=>{if(!w.def.grenade)w.reserve=Math.min(w.def.rmax,w.reserve+Math.round(w.def.mag*2.2));});toast('+ AMMUNITION RESUPPLY');}
-   if(pk.type==='frag'){const g=player.weapons.find(w=>w.key==='gr');if(g)g.reserve=Math.min(g.def.rmax,g.reserve+2);else toast('+ FRAG GRENADES');toast('+ FRAG GRENADES');}
+   if(pk.type==='frag'){const g=player.weapons.find(w=>w.key==='gr');if(g)g.reserve=Math.min(g.def.rmax,g.reserve+2);toast('+ FRAG GRENADES');}
    if(pk.type==='med'){player.hp=Math.min(100,player.hp+50);toast('+ MEDKIT');}
    Aud.pick();W.scene.remove(pk.mesh);W.pickups.splice(i,1);
   }}
@@ -1445,11 +1464,11 @@ function playerDie(){
 const dmgDirs=[];
 function showDmgDir(src){
  if(!src)return;
- let el=dmgDirs.find(d=>d.el.style.opacity!=='1'&&d.t<0);
+ let el=dmgDirs.find(d=>d.t<=0);
  if(!el){el={el:document.createElement('div'),t:0};el.el.className='dmgdir';el.el.innerHTML='<div class="dmgdiv"></div>';$('hud').appendChild(el.el);dmgDirs.push(el);}
  const bearing=Math.atan2(src.x-player.pos.x,src.z-player.pos.z);
  let rel=bearing-player.yaw-Math.PI;
- el.el.style.transform=`rotate(${rel}rad)`;
+ el.el.style.transform=`rotate(${-rel}rad)`;
  el.el.style.opacity='1';el.t=.7;
  setTimeout(()=>{el.el.style.opacity='0';el.t=0;},700);
 }
@@ -1470,7 +1489,7 @@ function spawnEnemy(spec){
   hp:T.hp,maxhp:T.hp,sc:T.sc,speed:T.speed,dmg:T.dmg,sight:(spec.sight||T.sight)*(W.envOpt&&W.envOpt.night?.88:1),
   state:'patrol',wp:spec.patrol||[],wpi:0,waitT:rand(.5,2),alertT:0,lastKnown:new THREE.Vector3(spec.x,0,spec.z),
   fireT:rand(.5,1.5),burstLeft:0,strafeT:rand(1,2.5),strafeDir:Math.random()<.5?1:-1,stuckT:0,lastPos:new THREE.Vector3(spec.x,0,spec.z),
-  checkT:0,yaw:rand(0,6.28),los:false,losT:0,scanT:0,cover:null,coverT:0,dead:false,corpseT:0,tag:spec.tag||null,
+  checkT:0,yaw:rand(0,6.28),tYaw:0,los:false,losT:0,scanT:0,cover:null,coverT:0,dead:false,corpseT:0,tag:spec.tag||null,
   grenT:spec.type==='boss'?6:0,phase2:false,walkT:Math.random()*9};
  // mesh
  const g=new THREE.Group();const s=T.sc;
@@ -1506,7 +1525,7 @@ function noiseAlert(x,z,r){
 function alertNearby(e,r,x,z){
  for(const o of W.enemies){
   if(o===e||o.dead)continue;
-  if(dist2(o.pos.x,o.pos.z,e.pos.x,e.pos.z)<r&&o.state==='patrol'){o.state='investigate';o.lastKnown.set(x,z?0:0,0);o.lastKnown.set(x,0,z);o.alertT=4;}
+  if(dist2(o.pos.x,o.pos.z,e.pos.x,e.pos.z)<r&&o.state==='patrol'){o.state='investigate';o.lastKnown.set(x,0,z);o.alertT=4;}
  }
 }
 function moveToward(ent,tx,tz,speed,dt){
@@ -1736,20 +1755,22 @@ function updateNPC(dt){
 }
 
 /* ---------------- OBJECTIVES / MISSION RUNTIME ---------------- */
-const G={state:'menu',missionIdx:0,run:{flags:{},killed:{},cp:null},stats:{time:0,kills:0,shots:0,hits:0},combatT:0};
+const G={state:'menu',missionIdx:0,run:{flags:{},killed:{},cp:null},stats:{time:0,kills:0,shots:0,hits:0},
+ combatT:0,freeLook:false};
 function curObj(){return W.objectives.find(o=>!o.done);}
 function completeObj(o){
  o.done=true;
  if(o.beams)o.beams.forEach(b=>b.visible=false);
  if(o.point&&o.point.marker)o.point.marker.visible=false;
  Aud.obj();toast('OBJECTIVE COMPLETE');
- checkpoint();
  if(o.onDone)o.onDone();
+ checkpoint();
  if(W.objectives.every(x=>x.done))missionComplete();
  else updateObjHUD(true);
 }
 function updateObjectives(dt){
  const o=curObj();if(!o)return;
+ if(o.kind!=='interact'&&(interShown||$('tbUse').style.display!=='none'))showInteract(false,null,o);
  if(o.kind==='reach'){
   const z=o.zone;
   if(player.pos.x>z[0]&&player.pos.x<z[2]&&player.pos.z>z[1]&&player.pos.z<z[3])completeObj(o);
@@ -1909,7 +1930,7 @@ function updateHUD(dt){
  // ammo
  const w=curWep();
  if(w){
-  const aStr=w.def.grenade?('×'+w.reserve):(w.mag+'|'+w.reserve+'|'+(WSTATE.reloading?'R':''));
+  const aStr=w.key+'|'+(w.def.grenade?('×'+w.reserve):(w.mag+'|'+w.reserve+'|'+(WSTATE.reloading?'R':'')));
   if(aStr!==lastAmmo){lastAmmo=aStr;
    $('wepName').textContent=w.def.name;
    $('wepCls').textContent=WSTATE.reloading?'RELOADING…':w.def.cls;
@@ -1941,7 +1962,7 @@ function updateHUD(dt){
    const bearing=Math.atan2(tx-player.pos.x,tz-player.pos.z);
    const fwd=Math.atan2(-Math.sin(player.yaw),-Math.cos(player.yaw));
    let rel=Math.atan2(Math.sin(bearing-fwd),Math.cos(bearing-fwd));
-   $('objArrow').style.transform='rotate('+(rel*180/Math.PI+180)+'deg)';
+   $('objArrow').style.transform='rotate('+(-rel*180/Math.PI)+'deg)';
    $('objDist').textContent=Math.round(dist2(tx,tz,player.pos.x,player.pos.z))+'m';
   }else{$('objDist').textContent='';}
  }else{$('objArrow').style.transform='';$('objDist').textContent='';}
@@ -1949,9 +1970,9 @@ function updateHUD(dt){
  if(W.boss&&!W.boss.dead&&W.boss.state==='combat'){
   $('bossWrap').style.display='block';
   $('bossFill').style.width=Math.max(0,W.boss.hp/W.boss.maxhp*100)+'%';
- }else if(W.boss&&W.boss.dead)$('bossWrap').style.display='none';
+ }else $('bossWrap').style.display='none';
  // click-to-resume overlay
- if(!touchOn()&&G.state==='play'&&!document.pointerLockElement){
+ if(!touchOn()&&G.state==='play'&&!document.pointerLockElement&&!G.freeLook){
   $('clickPlay').style.display='flex';$('cpBig').textContent='CLICK TO RESUME';
  }
  // touch ui visibility
@@ -1984,7 +2005,7 @@ function buildMissionCards(){
   list.appendChild(card);
  });
 }
-function fmtTime(t){const m=Math.floor(t/60),s=String(Math.floor(t%60)).padStart(2,'0');return m+':'+s;}
+function fmtTime(t){t=Math.max(0,isFinite(t)?t:0);const m=Math.floor(t/60),s=String(Math.floor(t%60)).padStart(2,'0');return m+':'+s;}
 function pauseGame(){
  if(G.state!=='play'&&G.state!=='ready')return;
  G.state='paused';
@@ -1998,7 +2019,7 @@ function resumeGame(){
  hideScreens();
  G.state='play';
  $('hud').classList.add('show');
- if(!touchOn()){$('cv').requestPointerLock&&$('cv').requestPointerLock();}
+ if(!touchOn())lockPointer();
  Aud.ui();
 }
 function quitToMenu(){
@@ -2014,7 +2035,7 @@ function startMission(idx,restore){
  Aud.init();
  G.missionIdx=idx;
  const def=MISSIONS[idx];
- G.run={flags:{},killed:{},cp:null};
+ G.run={flags:{},killed:{},cp:restore||null};
  if(restore){G.run.flags=restore.flags;G.run.killed=restore.killed;}
  G.state='loading';
  $('loadTitle').textContent='MISSION '+(idx+1)+' — '+def.name;
@@ -2060,6 +2081,7 @@ function beginPlay(){
   $('clickPlay').style.display='flex';$('cpBig').textContent='CLICK TO DEPLOY';
   $('hud').classList.add('show');
  }
+ updateOrientationUI();
  if(MISSIONS[G.missionIdx].hint)toast(MISSIONS[G.missionIdx].hint);
 }
 function restartCheckpoint(){
@@ -2138,10 +2160,10 @@ MISSIONS.push({
   W.start={x:0,z:63,yaw:0};
   const E=[
    {x:-3,z:11,type:'soldier',patrol:[[-3.5,10],[3.5,10],[3.5,16.5],[-3.5,16.5]],tag:'all'},
-   {x:7,z:8,type:'soldier',patrol:[[6,6],[13,6],[13,12.5]],tag:'all'},
-   {x:9,z:3.5,type:'soldier',patrol:[[9,3],[15,3],[15,11]],tag:'all'},
+   {x:7,z:8,type:'soldier',patrol:[[8,6],[13,6],[13,12.5]],tag:'all'},
+   {x:9.6,z:3.5,type:'soldier',patrol:[[9.6,3],[15,3],[15,11]],tag:'all'},
    {x:-15,z:3,type:'soldier',patrol:[[-14,2],[-20,9],[-12,16]],tag:'all'},
-   {x:18,z:1,type:'soldier',patrol:[[16,0],[22,7],[14,10]],tag:'all'},
+   {x:18,z:1,type:'soldier',patrol:[[16,0],[22,7],[15.5,10]],tag:'all'},
    {x:-5,z:-7,type:'soldier',patrol:[[-6,-6],[6,-6],[0,-13]],tag:'all'},
    {x:1,z:-24,type:'soldier',patrol:[[0,-20],[0,-33]],tag:'all'},
    {x:-8,z:-42,type:'soldier',patrol:[[-10,-40],[8,-42],[2,-48]],tag:'all'}
@@ -2210,7 +2232,6 @@ MISSIONS.push({
    for(const[ox,oz]of[[-1.3,-.9],[1.3,-.9],[-1.3,.9],[1.3,.9]])addBox(p[0]+ox,1.3,p[1]+oz,.09,2.6,.09,MAT.wood);
    W.coverPts.push([p[0],p[1]+2],[p[0],p[1]-2]);
   });
-  fences & nothing
   fence(-30,-30,26,'x');fence(30,-30,26,'x');
   fence(-34,10,30,'z');fence(34,12,26,'z');
   scatter(rng,-66,66,-66,66,40,(x,z)=>{if(Math.abs(x)<26&&Math.abs(z)<32)return;tree(x,z,.7+rng()*.8,rng()<.5);});
@@ -2221,7 +2242,7 @@ MISSIONS.push({
   // exit
   const beamsN=beamMarker(0,-56);
   addPointLight(0,2,-56,0x40ff80,1,16);
-  W.start={x:0,z:56,yaw:Math.PI};
+  W.start={x:0,z:56,yaw:0};
   // informant
   spawnNPC({x:-17,z:-9});
   const E=[
@@ -2229,7 +2250,7 @@ MISSIONS.push({
    {x:-8,z:-4,type:'soldier',patrol:[[-8,-4],[-14,-8],[-6,-14]],tag:'v'},
    {x:10,z:-6,type:'soldier',patrol:[[10,-6],[16,0],[10,8]],tag:'v'},
    {x:0,z:24,type:'soldier',patrol:[[0,24],[6,30],[-6,30]],tag:'v'},
-   {x:-20,z:14,type:'soldier',patrol:[[-20,14],[-12,24],[-24,22]],tag:'v'},
+   {x:-20,z:14,type:'soldier',patrol:[[-20,14],[-12,25],[-24,22]],tag:'v'},
    {x:20,z:-14,type:'soldier',patrol:[[20,-14],[26,-6],[18,-4]],tag:'v'},
    {x:0,z:-44,type:'soldier',patrol:[[0,-44],[8,-50],[-8,-50]],tag:'v'},
    {x:-26,z:-2,type:'soldier',patrol:[[-26,-2],[-32,6],[-24,12]],tag:'v'}
@@ -2249,7 +2270,7 @@ MISSIONS.push({
    });
    W.enemies.forEach(e=>{if(!e.dead&&e.state==='patrol'){e.state='investigate';e.lastKnown.set(player.pos.x,0,player.pos.z);e.alertT=6;}});
   }
-  if(G.run.flags.magpie){W.npc.follow=true;if(!G.run.flags.wave2){G.run.flags.wave2=true;spawnWave2();}}
+  if(G.run.flags.magpie){W.npc.follow=true;if(G.run.flags.wave2)spawnWave2();}
   W.objectives=[
    {text:'Find the informant MAGPIE',kind:'interact',point:ip,onDone:magFound},
    {text:'Escort MAGPIE to the north road',kind:'escort',zone:[-9,-64,9,-48],npc:true,beams:beamsN}
@@ -2298,7 +2319,6 @@ MISSIONS.push({
   building(0,-26,18,12,7,{doorSide:'s',doorW:2.4,doorH:2.8,mat:MAT.concrete,litWindows:false});
   addBox(0,7.6,-26,6,.5,4,MAT.metalD);// roof unit
   // desk + documents
-  addBox(1,-26+0,0,0,0,0,MAT.black,{collide:false});// noop guard
   addBox(1,.85,-27,3,.16,1.4,MAT.wood,{collide:true});
   addBox(1,.4,-27,.2,.8,.2,MAT.wood);addBox(1,.4,-26.4,.2,.8,.2,MAT.wood);
   const doc=new THREE.Mesh(GEO.box,MAT.emWarm);doc.scale.set(.5,.06,.36);doc.position.set(1,.97,-27);W.scene.add(doc);
@@ -2343,8 +2363,8 @@ MISSIONS.push({
    {x:-10,z:30,type:'soldier',patrol:[[-10,30],[10,30],[10,20],[-10,20]],tag:'in'},
    {x:0,z:10,type:'soldier',patrol:[[-14,10],[14,10]],tag:'in'},
    {x:-24,z:-8,type:'soldier',patrol:[[-24,-8],[-24,-20],[-14,-20]],tag:'in'},
-   {x:24,-8:0,z:-8,type:'soldier',patrol:[[24,-8],[24,-20],[14,-18]],tag:'in'},
-   {x:26,z:26,type:'soldier',patrol:[[24,24],[32,24],[32,32],[24,32]],tag:'in'},
+   {x:24,z:-8,type:'soldier',patrol:[[24,-8],[24,-20],[14,-18]],tag:'in'},
+   {x:33,z:30,type:'soldier',patrol:[[33,30],[36,34],[30,34]],tag:'in'},
    {x:-30,z:34,type:'soldier',patrol:[[-30,34],[-18,38],[-30,42]],tag:'in'},
    {x:0,z:-16,type:'soldier',patrol:[[-8,-16],[8,-16],[8,-10],[-8,-10]],tag:'in'},
    {x:-36,z:0,type:'soldier',patrol:[[-36,0],[-36,-20],[-40,-30]],tag:'in'},
@@ -2405,16 +2425,14 @@ MISSIONS.push({
   wx(-4.25,32,3.5);wx(4.25,32,3.5);
   // corridor A: x[-2.5,2.5] z[8,32]
   wz(-2.5,20,24);wz(2.5,20,24);
-  // junction x[-8,8] z[-2,8]
-  wz(-8,3,10);wz(8,3,10);
+  // junction x[-8,8] z[-2,8] — side walls split to leave openings (z 2.5..8)
+  // into the west corridor (=> generator room) and the east corridor (=> server room)
+  wz(-8,0.25,4.5);wz(-8,7.75,0.5);
+  wz(8,0.25,4.5);wz(8,7.75,0.5);
   wx(-5.25,-2,5.5);wx(5.25,-2,5.5);
   wx(-5.25,8,5.5);wx(5.25,8,5.5);
   // west corridor x[-28,-8] z[2.5,7.5]
   wx(-18,7.5,20);wx(-18,2.5,20);
-  // junction west wall gaps: rebuild west wall as segments with opening z 2.5..7.5
-  // (already: wz(-8,3,10) covers z -2..8 fully -> need opening!)
-  // fix: remove and re-add:
-  W.scene.remove(W.scene.children.find(c=>c===undefined)); // noop safe
   // generator room x[-48,-28] z[-4,14]
   wx(-38,14,20);wx(-38,-4,20);wz(-48,5,18);
   wz(-28,-0.75,3.5+2);wz(-28,10.75,6.5);
@@ -2432,8 +2450,6 @@ MISSIONS.push({
   // exit room x[-7,7] z[-44,-30]
   wz(-7,-37,14);wz(7,-37,14);
   wx(-4.75,-30,4.5);wx(4.75,-30,4.5);
-  // NOTE: junction west/east walls were added solid across z -2..8; carve openings by
-  // removing overlaps is complex — instead we PRE-SPLIT them: (handled below by design)
   // door frames & stripes
   const strip=(x,z,w,d)=>{const m=new THREE.Mesh(GEO.plane,new THREE.MeshLambertMaterial({color:0xb8a030}));
    m.rotation.x=-Math.PI/2;m.scale.set(w,d,1);m.position.set(x,.02,z);W.scene.add(m);};
@@ -2448,7 +2464,7 @@ MISSIONS.push({
    const m=emStrip(p[0],5.9,p[1],2.4,0.5,stripMatRed);W.stripMats.push(m);});
   W.redLights=[];W.whiteLights=[];
   [[0,20,0xff3020],[0,-12,0xff3020],[-30,5,0xff3020],[30,5,0xff3020]].forEach(p=>{
-   const l=addPointLight(p[0],4.6,p[2+0]||p[1],p[2],.7,20);});
+   addPointLight(p[0],4.6,p[1],p[2],.7,20);});
   W.lightsRed=(W.lights||[]).slice();
   // generator prop
   addBox(-40,1.4,5,5,2.8,3.4,MAT.metalD,{collide:true});
@@ -2511,7 +2527,7 @@ MISSIONS.push({
   };
   setPower(!!G.run.flags.power);
   if(G.run.flags.power){(W.whiteLights||[]).forEach(l=>{l.intensity=1.05;l.visible=true;});(W.lightsRed||[]).forEach(l=>{l.intensity=.2;});}
-  W.start={x:0,z:40,yaw:Math.PI};
+  W.start={x:0,z:40,yaw:0};
   const E=[
    {x:0,z:24,type:'soldier',patrol:[[0,26],[0,12]],sight:30,tag:'u'},
    {x:0,z:4,type:'soldier',patrol:[[-5,4],[5,4],[5,-1],[-5,-1]],sight:30,tag:'u'},
@@ -2520,9 +2536,9 @@ MISSIONS.push({
    {x:-40,z:10,type:'soldier',patrol:[[-40,10],[-44,0],[-36,-2]],sight:28,tag:'u'},
    {x:16,z:5,type:'soldier',patrol:[[14,5],[24,5]],sight:28,tag:'u'},
    {x:36,z:2,type:'soldier',patrol:[[36,2],[42,8],[34,10]],sight:28,tag:'u'},
-   {x:40,z:10,type:'soldier',patrol:[[40,10],[44,0],[36,-2]],sight:28,tag:'u'},
+   {x:40,z:10,type:'soldier',patrol:[[40,10],[45.5,0],[36,-2]],sight:28,tag:'u'},
    {x:0,z:-12,type:'soldier',patrol:[[0,-8],[0,-24]],sight:30,tag:'u'},
-   {x:8,z:-19,type:'soldier',patrol:[[6,-18],[12,-18],[12,-22]],sight:26,tag:'u'},
+   {x:8,z:-19,type:'soldier',patrol:[[5,-18],[12,-18],[12,-22]],sight:26,tag:'u'},
    {x:0,z:-38,type:'soldier',patrol:[[-4,-38],[4,-38]],sight:28,tag:'u'}
   ];
   E.forEach(s=>spawnEnemy(s));
@@ -2627,7 +2643,7 @@ MISSIONS.push({
   W.start={x:0,z:62,yaw:0};
   const E=[
    {x:-8,z:34,type:'heavy',patrol:[[-8,34],[8,34],[8,26],[-8,26]],tag:'appr'},
-   {x:14,z:14,type:'heavy',patrol:[[14,14],[20,4],[12,-2]],tag:'appr'},
+   {x:14,z:14,type:'heavy',patrol:[[14,14],[16,2],[12,-2]],tag:'appr'},
    {x:-16,z:8,type:'heavy',patrol:[[-16,8],[-22,-2],[-12,-6]],tag:'appr'},
    {x:0,z:16,type:'heavy',patrol:[[0,20],[0,6]],tag:'appr'},
    {x:-20,z:-6,type:'heavy',patrol:[[-20,-6],[-26,2],[-18,4]],tag:'appr'},
@@ -2657,7 +2673,7 @@ MISSIONS.push({
   }
   W.objectives=[
    {text:'Clear the fortress approach (elite guard)',kind:'kill',tags:['appr'],left:8},
-   {text:'Breach the command bunker',kind:'reach',zone:[-5,-18,5,-10],beams:beamsDoor,
+   {text:'Breach the command bunker',kind:'reach',zone:[-5,-19,5,-15.5],beams:beamsDoor,
     onDone:()=>{spawnBoss();}},
    {text:'Eliminate Colonel Dragan Voss',kind:'kill',tags:['boss'],left:1}
   ];
@@ -2670,7 +2686,8 @@ function setupObjectivesDoneFlags(){/* objectives freshly built; restore handled
 let lastT=performance.now();
 function frame(now){
  requestAnimationFrame(frame);
- let dt=Math.min((now-lastT)/1000,.05);lastT=now;
+ let dt=(now-lastT)/1000;lastT=now;
+ if(!isFinite(dt)||dt<0)dt=0;else if(dt>.05)dt=.05;
  if(!W||(G.state!=='play'&&G.state!=='cine'&&G.state!=='paused'&&G.state!=='ready'&&G.state!=='dead'&&G.state!=='failed')){
   if(G.state==='menu'||G.state==='loading'){/* no render */}
   return;
@@ -2722,7 +2739,7 @@ function bindUI(){
    syncSettingsUI();showScreen('scrSettings');}
   else if(a==='controls')showScreen('scrControls');
   else if(a==='about')showScreen('scrAbout');
-  else if(a==='back'){showScreen(b.dataset.to||'scrMenu');}
+  else if(a==='back'){showScreen(b.id==='btnSetBack'?settingsReturn:(b.dataset.to||'scrMenu'));}
   else if(a==='startm'){startMission(+b.dataset.mi,false);}
   else if(a==='resume')resumeGame();
   else if(a==='cp')restartCheckpoint();
@@ -2746,7 +2763,7 @@ function bindUI(){
  bind('setSfx',el=>{S.sfx=+el.value/100;$('sfxVal').textContent=el.value;Aud.applyVol();saveS();});
  bind('setMusic',el=>{S.music=+el.value/100;$('musicVal').textContent=el.value;Aud.applyVol();saveS();});
  bind('setInvert',el=>{S.invert=el.value==='1';saveS();});
- bind('setTouch',el=>{S.touch=el.value;saveS();});
+ bind('setTouch',el=>{S.touch=el.value;saveS();updateOrientationUI();});
  $('btnFull').addEventListener('click',()=>{
   if(!document.fullscreenElement){(document.documentElement.requestFullscreen||function(){}).call(document.documentElement);}
   else if(document.exitFullscreen)document.exitFullscreen();
@@ -2823,6 +2840,7 @@ function boot(){
   buildMissionCards();
   Aud.setMusicTheme(0,0);
   showScreen('scrMenu');
+  updateOrientationUI();
   requestAnimationFrame(frame);
  }catch(err){
   $('loadTitle')&&( $('loadTitle').textContent='INIT ERROR');
