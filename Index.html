@@ -128,10 +128,23 @@ select{background:#1a2016;color:#dfe6d8;border:1px solid #5a6b4a;padding:7px 10p
 #scopeOvl:before,#scopeOvl:after{content:'';position:absolute;background:rgba(20,25,15,.9)}
 #scopeOvl:before{left:0;right:0;top:50%;height:1px}
 #scopeOvl:after{top:0;bottom:0;left:50%;width:1px}
+/* night vision */
+#nvOvl{position:fixed;inset:0;z-index:2;pointer-events:none;display:none;
+ background:radial-gradient(ellipse at center,rgba(30,255,120,.015) 0%,rgba(0,28,9,.30) 70%,rgba(0,10,3,.58) 100%)}
+#nvOvl.on{display:block}
+#nvOvl:before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.65;
+ background:repeating-linear-gradient(0deg,rgba(0,255,90,.055) 0 1px,transparent 1px 3px)}
+#nvOvl:after{content:'';position:absolute;inset:0;pointer-events:none;
+ box-shadow:inset 0 0 150px rgba(0,255,80,.20);animation:nvflick 4.2s infinite}
+@keyframes nvflick{0%,100%{opacity:.9}47%{opacity:1}50%{opacity:.72}53%{opacity:1}78%{opacity:.86}}
+#nvBtn{position:absolute;top:calc(env(safe-area-inset-top,0px) + 62px);right:calc(env(safe-area-inset-right,0px) + 12px);
+ pointer-events:auto;z-index:6;width:44px;height:44px;background:rgba(10,14,8,.6);border:1px solid #5a6b4a;color:#9fd060;
+ font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;cursor:pointer;display:none}
+#nvBtn.on{background:rgba(30,110,45,.72);border-color:#7dff9a;color:#eaffea;box-shadow:0 0 12px rgba(90,255,120,.55)}
 /* touch controls */
 #touchUI{position:fixed;inset:0;z-index:5;display:none}
 #touchLayer{position:absolute;inset:0}
-#joyZone{position:absolute;left:0;bottom:0;width:48%;height:64%}
+#joyZone{position:absolute;left:0;bottom:0;width:34%;height:46%}
 #joyBase{position:absolute;width:128px;height:128px;border-radius:50%;border:2px solid rgba(200,215,180,.4);
  background:rgba(12,16,10,.3);display:none;transform:translate(-50%,-50%)}
 #joyKnob{position:absolute;left:50%;top:50%;width:54px;height:54px;border-radius:50%;background:rgba(210,225,185,.35);
@@ -209,8 +222,10 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
   <div id="dmgLayer"></div>
   <div id="lowHp"></div>
   <button id="pauseBtn">❚❚</button>
+  <button id="nvBtn">NV</button>
 </div>
 <div id="scopeOvl"></div>
+<div id="nvOvl"></div>
 
 <div id="touchUI">
   <div id="touchLayer"></div>
@@ -284,7 +299,7 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
           <tr><td>LOOK / CAMERA</td><td>MOUSE</td></tr><tr><td>SHOOT</td><td>LEFT MOUSE</td></tr>
           <tr><td>AIM (ADS)</td><td>RIGHT MOUSE (hold)</td></tr><tr><td>RELOAD</td><td>R</td></tr>
           <tr><td>SWITCH WEAPON</td><td>1 – 5 / MOUSE WHEEL</td></tr><tr><td>INTERACT</td><td>E (hold)</td></tr>
-          <tr><td>PAUSE</td><td>ESC</td></tr>
+          <tr><td>NIGHT VISION</td><td>N (toggle)</td></tr><tr><td>PAUSE</td><td>ESC</td></tr>
         </table>
       </div>
       <div style="flex:1;min-width:250px">
@@ -297,7 +312,7 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
           <tr><td>RELOAD / SWAP</td><td>RELOAD · SWAP buttons</td></tr>
           <tr><td>JUMP / CROUCH</td><td>JUMP · CROU buttons</td></tr>
           <tr><td>INTERACT</td><td>USE button (appears near objectives)</td></tr>
-          <tr><td>PAUSE</td><td>❚❚ TOP-RIGHT</td></tr>
+          <tr><td>NIGHT VISION</td><td>NV BUTTON (top-right)</td></tr><tr><td>PAUSE</td><td>❚❚ TOP-RIGHT</td></tr>
         </table>
       </div>
     </div>
@@ -316,7 +331,7 @@ table.ctrl td:first-child{color:#ffd97a;font-weight:700;width:42%;letter-spacing
     summit fortress — face to face with <b style="color:#ff8a70">Colonel Dragan Voss</b>.</p>
     <p style="line-height:1.6;font-size:15.5px;color:#c6cebb;margin-top:12px">
     A complete single-player FPS: 5 missions, 6 weapons, enemy AI with patrol/cover/suppression, checkpoints, health regen,
-    boss fight, cinematics, full PC + mobile controls, procedural audio and scalable graphics.</p>
+    night-vision goggles, aim assist, boss fight, cinematics, full PC + mobile controls, procedural audio and scalable graphics.</p>
     <div class="disclaimer" style="margin-top:18px">Version 1.0 · All characters, locations, units and political organizations are fictional.
     No real countries, armies or events are depicted.</div>
     <div class="btnRow"><button class="btn" data-a="back" data-to="scrMenu">◀ BACK</button></div>
@@ -611,6 +626,8 @@ function buildShared(){
  MAT.gun=new THREE.MeshLambertMaterial({color:0x23262a});
  MAT.gun2=new THREE.MeshLambertMaterial({color:0x34383d});
  MAT.skin=new THREE.MeshLambertMaterial({color:0xc99e7a});
+ MAT.foeSkin=new THREE.MeshLambertMaterial({color:0xc99e7a});
+ MAT.npcSkin=new THREE.MeshLambertMaterial({color:0xc99e7a});
  MAT.foeBody=new THREE.MeshLambertMaterial({color:0x3a3f36});
  MAT.foeBody2=new THREE.MeshLambertMaterial({color:0x33372f});
  MAT.foeHelmet=new THREE.MeshLambertMaterial({color:0x2a2e26});
@@ -674,8 +691,56 @@ function envSetup(o){
  if(o.dirI){const d=new THREE.DirectionalLight(o.dirColor,o.dirI);d.position.set(o.dirPos[0],o.dirPos[1],o.dirPos[2]);sc.add(d);W.dir=d;}
  if(o.ambI){const a=new THREE.AmbientLight(o.amb||0xffffff,o.ambI);sc.add(a);W.amb=a;}
  if(o.stars)addStars(o.stars);
+ // dedicated night-vision light (off unless the goggles are on) + baseline look
+ const nvl=new THREE.AmbientLight(0x00ff44,0);sc.add(nvl);W.nvLight=nvl;
+ W.nvBase={bg:o.sky,fog:o.fog,fogNear:o.fogNear,fogFar:o.fogFar,
+  hemiSky:o.hemiSky,hemiGnd:o.hemiGnd,hemiI:o.hemiI,
+  dirColor:o.dirColor===undefined?0x8fa8cc:o.dirColor,dirI:o.dirI||0,
+  ambC:o.amb===undefined?0xffffff:o.amb,ambI:o.ambI||0};
  W.envOpt=o;
 }
+
+/* ---------------- NIGHT VISION ---------------- */
+const NV={on:false,base:null,
+ init(){
+  this.base=[
+   [MAT.foeBody,0x3a3f36,0x000000],[MAT.foeBody2,0x33372f,0x000000],[MAT.foeSkin,0xc99e7a,0x000000],
+   [MAT.foeHelmet,0x2a2e26,0x000000],[MAT.heavyBody,0x2c2f36,0x000000],[MAT.bossBody,0x3d2530,0x000000],
+   [MAT.npcBody,0x5a6a78,0x000000],[MAT.npcSkin,0xc99e7a,0x000000]
+  ];
+ },
+ toggle(){if(!W&&!this.on)return;this.set(!this.on);Aud.click(1700,.22,.05);},
+ set(on){
+  on=!!on;this.on=on;
+  const ov=$('nvOvl');if(ov)ov.classList.toggle('on',on);
+  const btn=$('nvBtn');if(btn)btn.classList.toggle('on',on);
+  if(this.base)for(const b of this.base){
+   const m=b[0];
+   if(on){
+    const friendly=(m===MAT.npcBody||m===MAT.npcSkin);
+    m.color.setHex(friendly?0x07202c:0x2a0302);
+    m.emissive.setHex(friendly?0x35e0ff:0xff2412);
+   }else{m.color.setHex(b[1]);m.emissive.setHex(b[2]);}
+  }
+  if(!W||!W.nvBase)return;
+  const b=W.nvBase,sc=W.scene;
+  if(on){
+   if(sc.background&&sc.background.setHex)sc.background.setHex(0x02120a);
+   if(sc.fog){sc.fog.color.setHex(0x04170c);sc.fog.near=Math.max(1,b.fogNear*.45);sc.fog.far=Math.max(70,b.fogFar*1.9);}
+   if(W.hemi){W.hemi.color.setHex(0x00ff66);W.hemi.groundColor.setHex(0x00180a);W.hemi.intensity=1.4;}
+   if(W.dir){W.dir.color.setHex(0x77ffa8);W.dir.intensity=.3;}
+   if(W.amb){W.amb.color.setHex(0x00ff55);W.amb.intensity=1.1;}
+   if(W.nvLight)W.nvLight.intensity=.85;
+  }else{
+   if(sc.background&&sc.background.setHex)sc.background.setHex(b.bg);
+   if(sc.fog){sc.fog.color.setHex(b.fog);sc.fog.near=b.fogNear;sc.fog.far=b.fogFar;}
+   if(W.hemi){W.hemi.color.setHex(b.hemiSky);W.hemi.groundColor.setHex(b.hemiGnd);W.hemi.intensity=b.hemiI;}
+   if(W.dir){W.dir.color.setHex(b.dirColor);W.dir.intensity=b.dirI;}
+   if(W.amb){W.amb.color.setHex(b.ambC);W.amb.intensity=b.ambI;}
+   if(W.nvLight)W.nvLight.intensity=0;
+  }
+ }
+};
 function addStars(n){
  const pos=new Float32Array(n*3);
  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,r=140+Math.random()*60,y=30+Math.random()*90;
@@ -1033,6 +1098,7 @@ function bindInput(){
    else if(G.state==='paused')resumeGame();
   }
   if(e.code==='Space'&&G.state==='ready')clickDeploy();
+  if(e.code==='KeyN'&&(G.state==='play'||G.state==='ready'||G.state==='paused'))NV.toggle();
  },{passive:false});
  window.addEventListener('keyup',e=>{Input.keys[e.code]=false;});
  window.addEventListener('blur',()=>{Input.keys={};if(G.state==='play')pauseGame();});
@@ -1062,7 +1128,7 @@ function bindInput(){
  jz.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();
   const t=e.changedTouches[0];if(Input.joy.active)return;
   Input.joy.active=true;Input.joy.id=t.identifier;
-  const bx=clamp(t.clientX,80,window.innerWidth*.45),by=clamp(t.clientY,window.innerHeight*.38,window.innerHeight-95);
+  const bx=clamp(t.clientX,74,window.innerWidth*.34),by=clamp(t.clientY,window.innerHeight*.55,window.innerHeight-95);
   Input.joy.bx=bx;Input.joy.by=by;
   const base=$('joyBase');base.style.display='block';base.style.left=bx+'px';base.style.top=by+'px';
   updJoy(t);},{passive:false});
@@ -1270,17 +1336,23 @@ function tryFire(w){
  const ads=smooth(WSTATE.adsT);
  const spd=Math.hypot(player.vel.x,player.vel.z);
  let spread=lerp(d.spread,d.adsSpread,ads)+WSTATE.bloom+(spd>4?.006:0)+(player.onGround?0:.012);
+ // aim assist: if the shot is close to a visible hostile, snap the reticle onto him
+ const assist=aimAssist(ex,ey,ez,dx,dy,dz,d.range||120);
+ if(assist){
+  dx=assist.x;dy=assist.y;dz=assist.z;
+  player.yaw=Math.atan2(-dx,-dz);
+  player.pitch=clamp(Math.asin(clamp(dy,-1,1)),-1.53,1.53);
+ }
  const rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);
  for(let p=0;p<pellets;p++){
-  let ax=dx+rx*rand(-spread,spread)+(Math.random()-.5)*spread*.6;
-  let ay=dy+rand(-spread,spread);
-  let az=dz+(-Math.sin(player.yaw))*0+rand(-spread,spread)*(Math.abs(rx)+.4);
-  // rebuild proper spread using camera basis:
-  ax=dx+rx*rand(-spread,spread)*1.2;
-  ay=dy+rand(-spread,spread)*1.2;
-  az=dz-rz*rand(-spread,spread)*1.2*-1;
-  az=dz+(-rz)*rand(-spread,spread)*1.2;
-  const l=Math.hypot(ax,ay,az);ax/=l;ay/=l;az/=l;
+  let ax,ay,az;
+  if(assist&&p===0){ax=dx;ay=dy;az=dz;}
+  else{
+   ax=dx+rx*rand(-spread,spread)*1.2;
+   ay=dy+rand(-spread,spread)*1.2;
+   az=dz-rz*rand(-spread,spread)*1.2;
+   const l=Math.hypot(ax,ay,az);ax/=l;ay/=l;az/=l;
+  }
   fireRay(ex+ax*.6,ey-.06+ay*.6,ez+az*.6,ax,ay,az,d.range||120,d.dmg);
  }
  WSTATE.bloom=Math.min(.05,WSTATE.bloom+(d.spread*.55));
@@ -1295,6 +1367,25 @@ function tryFire(w){
  Aud.shot(d.sound,0,1);
  noiseAlert(player.pos.x,player.pos.z,w.key==='sr'?90:55);
  G.combatT=6;
+}
+function aimAssist(ex,ey,ez,dx,dy,dz,maxRange){
+ if(!W)return null;
+ const cone=touchOn()?.13:.085;
+ const range=Math.min(maxRange||120,90);
+ let best=null,bestAng=cone;
+ for(const e of W.enemies){
+  if(e.dead)continue;
+  const ty=e.pos.y+1.05*e.sc;
+  let vx=e.pos.x-ex,vy=ty-ey,vz=e.pos.z-ez;
+  const d=Math.hypot(vx,vy,vz);
+  if(d>range||d<.7)continue;
+  vx/=d;vy/=d;vz/=d;
+  const ang=Math.acos(clamp(vx*dx+vy*dy+vz*dz,-1,1));
+  if(ang>=bestAng)continue;
+  if(!segClear(ex,ey,ez,e.pos.x,ty,e.pos.z))continue;
+  bestAng=ang;best={x:vx,y:vy,z:vz,e};
+ }
+ return best;
 }
 function fireRay(ox,oy,oz,dx,dy,dz,range,dmg){
  let eT=range,eHit=null,eHead=false;
@@ -1496,7 +1587,7 @@ function spawnEnemy(spec){
  const bodyMat=spec.type==='heavy'?MAT.heavyBody:(spec.type==='boss'?MAT.bossBody:MAT.foeBody);
  const bd=new THREE.Mesh(GEO.box,bodyMat);bd.scale.set(.62*s,.78*s,.34*s);bd.position.y=1.12*s;g.add(bd);
  const vest=new THREE.Mesh(GEO.box,MAT.foeBody2);vest.scale.set(.66*s,.4*s,.38*s);vest.position.y=1.2*s;g.add(vest);
- const hd=new THREE.Mesh(GEO.box,MAT.skin);hd.scale.set(.26*s,.26*s,.26*s);hd.position.y=1.66*s;g.add(hd);
+ const hd=new THREE.Mesh(GEO.box,MAT.foeSkin);hd.scale.set(.26*s,.26*s,.26*s);hd.position.y=1.66*s;g.add(hd);
  const hlm=new THREE.Mesh(GEO.box,MAT.foeHelmet);hlm.scale.set(.3*s,.14*s,.32*s);hlm.position.y=1.78*s;g.add(hlm);
  const vis=new THREE.Mesh(GEO.box,MAT.foeVisor);vis.scale.set(.26*s,.05*s,.02*s);vis.position.set(0,1.68*s,-.135*s);g.add(vis);
  const lL=new THREE.Mesh(GEO.box,MAT.foeBody2);lL.scale.set(.2*s,.75*s,.22*s);lL.position.set(-.16*s,.38*s,0);g.add(lL);
@@ -1717,7 +1808,7 @@ function dropPickup(x,z,type){
 function spawnNPC(spec){
  const g=new THREE.Group();
  const bd=new THREE.Mesh(GEO.box,MAT.npcBody);bd.scale.set(.55,.72,.3);bd.position.y=1.1;g.add(bd);
- const hd=new THREE.Mesh(GEO.box,MAT.skin);hd.scale.set(.24,.26,.24);hd.position.y=1.62;g.add(hd);
+ const hd=new THREE.Mesh(GEO.box,MAT.npcSkin);hd.scale.set(.24,.26,.24);hd.position.y=1.62;g.add(hd);
  const hat=new THREE.Mesh(GEO.box,MAT.dark);hat.scale.set(.3,.08,.3);hat.position.y=1.76;g.add(hat);
  const lL=new THREE.Mesh(GEO.box,MAT.dark);lL.scale.set(.18,.72,.2);lL.position.set(-.14,.36,0);g.add(lL);
  const lR=lL.clone();lR.position.x=.14;g.add(lR);
@@ -1977,6 +2068,8 @@ function updateHUD(dt){
  }
  // touch ui visibility
  $('touchUI').style.display=(touchOn()&&(G.state==='play'))?'block':'none';
+ // night-vision button (touch)
+ $('nvBtn').style.display=(touchOn()&&G.state==='play')?'block':'none';
  // sprint/crouch button states
  $('tbSprint').classList.toggle('on',player.sprinting);
  $('tbCrouch').classList.toggle('on',player.crouch);
@@ -2024,6 +2117,7 @@ function resumeGame(){
 }
 function quitToMenu(){
  G.state='menu';W=null;G.run.cp=null;
+ if(NV.on)NV.set(false);
  $('hud').classList.remove('show');$('touchUI').style.display='none';$('bossWrap').style.display='none';
  if(document.pointerLockElement)document.exitPointerLock();
  Aud.setAmbient('menu');Aud.setMusicTheme(0,0);
@@ -2051,6 +2145,7 @@ function buildMission(def,restore){
  makeLoadout(def.loadout);
  def.build(restore);
  FX.init(W.scene);
+ if(NV.on)NV.set(true);
  // restore or fresh
  if(restore){
   player.pos.set(restore.x,0,restore.z);player.yaw=restore.yaw;
@@ -2524,6 +2619,7 @@ MISSIONS.push({
    (W.lightsRed||[]).forEach(l=>{l.intensity=.2;});
    toast('FACILITY POWER RESTORED');
    kf('PA SYSTEM: "Power normalized. All stations report."');
+   if(NV.on)NV.set(true); // keep the goggle tint on top of the new lighting
   };
   setPower(!!G.run.flags.power);
   if(G.run.flags.power){(W.whiteLights||[]).forEach(l=>{l.intensity=1.05;l.visible=true;});(W.lightsRed||[]).forEach(l=>{l.intensity=.2;});}
@@ -2764,6 +2860,9 @@ function bindUI(){
  bind('setMusic',el=>{S.music=+el.value/100;$('musicVal').textContent=el.value;Aud.applyVol();saveS();});
  bind('setInvert',el=>{S.invert=el.value==='1';saveS();});
  bind('setTouch',el=>{S.touch=el.value;saveS();updateOrientationUI();});
+ ['click','touchend'].forEach(ev=>{
+  $('nvBtn').addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();NV.toggle();});
+ });
  $('btnFull').addEventListener('click',()=>{
   if(!document.fullscreenElement){(document.documentElement.requestFullscreen||function(){}).call(document.documentElement);}
   else if(document.exitFullscreen)document.exitFullscreen();
@@ -2830,6 +2929,7 @@ function boot(){
  try{
   buildTextures();
   buildShared();
+  NV.init();
   MAT.camonet=new THREE.MeshLambertMaterial({color:0xffffff,map:TEX.camonet});
   initThree();
   bindInput();
